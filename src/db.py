@@ -26,6 +26,7 @@ class Post(Base):
     caption = Column(Text)
     url = Column(String, nullable=False)
     file_name = Column(String, nullable=False)
+    file_id= Column(String, nullable=None)
     file_type = Column(String,nullable=False )
     created_at = Column(DateTime, default=datetime.utcnow)
 

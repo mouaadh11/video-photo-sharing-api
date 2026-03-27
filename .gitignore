@@ -8,3 +8,6 @@ wheels/
 
 # Virtual environments
 .venv
+.env
+
+uploads/photo_2026-03-02_01-28-05.jpg
