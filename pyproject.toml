@@ -4,4 +4,13 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "aiosqlite>=0.22.1",
+    "alembic>=1.18.4",
+    "asyncpg>=0.31.0",
+    "fastapi>=0.135.2",
+    "fastapi-users[sqlalchemy]>=15.0.4",
+    "imagekitio[aiohttp]>=5.2.0",
+    "python-dotenv>=1.2.2",
+    "uvicorn[standard]>=0.42.0",
+]
