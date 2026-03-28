@@ -1,5 +1,7 @@
 from collections.abc import AsyncGenerator
 
+from fastapi import Depends
+from fastapi_users.db import SQLAlchemyBaseUserTableUUID, SQLAlchemyUserDatabase
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy import Column, Integer, String, Text,  DateTime, ForeignKey
 import uuid
@@ -19,6 +21,16 @@ DATABASE_URL= os.getenv("DATABASE_URL")
 #Create a model
 Base = declarative_base()
 
+class User(SQLAlchemyBaseUserTableUUID, Base):
+    # __tablename__ = "users"
+
+    # id= Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    # email = Column(String, unique=True)
+    # password = Column(String)
+
+     # 🔗 relationship
+    posts = relationship("Post", back_populates="user", cascade="all, delete")
+
 class Post(Base):
     __tablename__= "posts"
 
@@ -29,6 +41,17 @@ class Post(Base):
     file_id= Column(String, nullable=None)
     file_type = Column(String,nullable=False )
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    # 🔑 Foreign key
+    user_id = Column(UUID, ForeignKey("user.id"))
+
+    # 🔗 relationship
+    user = relationship("User", back_populates="posts")
+
+# DB adapter
+
+
+
 
 
 #Database connection
@@ -47,3 +70,6 @@ async def create_db_and_tables():
 async def get_async_session() ->AsyncGenerator[AsyncSession, None]:
     async with async_session_maker() as session:
         yield session
+
+async def get_user_db(session: AsyncSession = Depends(get_async_session)):
+    yield SQLAlchemyUserDatabase(session, User)

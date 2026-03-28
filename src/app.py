@@ -1,12 +1,16 @@
+from src.auth import fastapi_users
+from pydantic import Field
+from sqlalchemy.orm import selectinload # Add this import
+from src.schemas import UserCreate, UserRead, UserUpdate
 from fastapi import Depends, FastAPI, HTTPException, UploadFile, File, Form
 from sqlalchemy import UUID, desc, select
 # from src.schemas import Post
 
-from src.db import create_db_and_tables, get_async_session, Post
+from src.auth import get_current_user, auth_backend
+from src.db import User, create_db_and_tables, get_async_session, Post
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from contextlib import asynccontextmanager
-from fastapi.responses import JSONResponse
 import os
 
 from src.images import imagekit
@@ -22,12 +26,80 @@ async def lifspan(app: FastAPI):
 
 app = FastAPI(lifespan=lifspan)
 
+app.include_router(
+    fastapi_users.get_auth_router(auth_backend),
+    prefix="/auth/jwt",
+    tags=["auth"],
+)
+
+app.include_router(
+    fastapi_users.get_register_router(UserRead, UserCreate),
+    prefix="/auth",
+    tags=["auth"],
+)
+app.include_router(fastapi_users.get_reset_password_router(), prefix="/auth", tags=["auth"])
+app.include_router(fastapi_users.get_verify_router(UserRead), prefix="/auth", tags=["auth"])
+app.include_router(fastapi_users.get_users_router(UserRead, UserUpdate), prefix="/users", tags=["users"])
+
+
+# @app.post("/register")
+# async def register(
+#     email: str = Form(...),
+#     password: str = Form(...),
+#     session: AsyncSession = Depends(get_async_session)
+# ):
+#     # 🔍 Check if user already exists
+#     result = await session.execute(select(User).where(User.email == email))
+#     existing_user = result.scalar_one_or_none()
+
+#     if existing_user:
+#         raise HTTPException(status_code=400, detail="Email already registered")
+
+#     print ("----Register----")
+#     print("PASSWORD:", password)
+#     print("LENGTH:", len(password))
+#     print("TYPE:", type(password))
+#     # 🔐 Hash password
+#     hashed_password = hash_password(password)
+
+#     # 👤 Create user
+#     new_user = User(
+#         email=email,
+#         password=hashed_password
+#     )
+
+#     session.add(new_user)
+#     await session.commit()
+#     await session.refresh(new_user)
+
+#     return {
+#         "message": "User created successfully",
+#         "user_id": new_user.id,
+#         "email": new_user.email
+#     }
+
+# @app.post("/login")
+# async def login(email: str= Form(...), password: str = Form(...), session: AsyncSession = Depends(get_async_session)):
+#     result = await session.execute(select(User).where(User.email == email))
+#     user = result.scalar_one_or_none()
+
+#     if not user or not verify_password(password, user.password):
+#         raise HTTPException(status_code=401, detail="Invalid credentials")
+
+#     token = create_access_token({"user_id": str(user.id)})
+
+#     return {"access_token": token}
+
 @app.get("/feed")
 async def get_feed(
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_async_session)
 ):
+    # Use .options(selectinload(Post.user)) to pull the user data in the same 'await'
     result = await session.execute(
-        select(Post).order_by(desc(Post.id))  # newest first
+        select(Post)
+        .options(selectinload(Post.user)) 
+        .order_by(desc(Post.id))
     )
     posts = result.scalars().all()
 
@@ -36,8 +108,10 @@ async def get_feed(
             "id": post.id,
             "caption": post.caption,
             "url": post.url,
+            "email": post.user.email,
             "file_type": post.file_type,
-            "file_name": post.file_name
+            "file_name": post.file_name, 
+            "created_at": post.created_at
         }
         for post in posts
     ]
@@ -46,6 +120,7 @@ UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 @app.post("/upload/")
 async def upload_file(
+    user: User = Depends(get_current_user),
     file: UploadFile = File(...),
     caption: str = Form(...),
     session: AsyncSession = Depends(get_async_session)
@@ -65,6 +140,7 @@ async def upload_file(
                 tags=["backend-upload"]
             )
         post = Post(
+        user_id = user.id,
         caption=caption,
         url=response.url,
         file_id=response.file_id,

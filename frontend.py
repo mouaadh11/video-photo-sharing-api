@@ -116,7 +116,9 @@ def feed_page():
 
     response = requests.get("http://localhost:8000/feed", headers=get_headers())
     if response.status_code == 200:
-        posts = response.json()["posts"]
+        # posts = response.json()["posts"]
+        posts = response.json()  # The response itself is already the list
+
 
         if not posts:
             st.info("No posts yet! Be the first to share something.")
