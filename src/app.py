@@ -1,13 +1,11 @@
-from src.auth import fastapi_users
-from pydantic import Field
-from sqlalchemy.orm import selectinload # Add this import
+from sqlalchemy.orm import selectinload 
 from src.schemas import UserCreate, UserRead, UserUpdate
 from fastapi import Depends, FastAPI, HTTPException, UploadFile, File, Form
 from sqlalchemy import UUID, desc, select
-# from src.schemas import Post
 
-from src.auth import get_current_user, auth_backend
-from src.db import User, create_db_and_tables, get_async_session, Post
+from src.auth import auth_backend
+from src.db import create_db_and_tables, get_async_session
+from src.models import User, Post
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from contextlib import asynccontextmanager
@@ -18,6 +16,17 @@ import uuid
 import tempfile
 import shutil
 
+
+from fastapi_users import FastAPIUsers
+
+from src.user_manager import get_user_manager
+
+
+fastapi_users = FastAPIUsers[User, uuid.UUID](
+    get_user_manager,
+    [auth_backend],
+)
+current_user = fastapi_users.current_user()
 
 @asynccontextmanager
 async def lifspan(app: FastAPI):
@@ -42,57 +51,9 @@ app.include_router(fastapi_users.get_verify_router(UserRead), prefix="/auth", ta
 app.include_router(fastapi_users.get_users_router(UserRead, UserUpdate), prefix="/users", tags=["users"])
 
 
-# @app.post("/register")
-# async def register(
-#     email: str = Form(...),
-#     password: str = Form(...),
-#     session: AsyncSession = Depends(get_async_session)
-# ):
-#     # 🔍 Check if user already exists
-#     result = await session.execute(select(User).where(User.email == email))
-#     existing_user = result.scalar_one_or_none()
-
-#     if existing_user:
-#         raise HTTPException(status_code=400, detail="Email already registered")
-
-#     print ("----Register----")
-#     print("PASSWORD:", password)
-#     print("LENGTH:", len(password))
-#     print("TYPE:", type(password))
-#     # 🔐 Hash password
-#     hashed_password = hash_password(password)
-
-#     # 👤 Create user
-#     new_user = User(
-#         email=email,
-#         password=hashed_password
-#     )
-
-#     session.add(new_user)
-#     await session.commit()
-#     await session.refresh(new_user)
-
-#     return {
-#         "message": "User created successfully",
-#         "user_id": new_user.id,
-#         "email": new_user.email
-#     }
-
-# @app.post("/login")
-# async def login(email: str= Form(...), password: str = Form(...), session: AsyncSession = Depends(get_async_session)):
-#     result = await session.execute(select(User).where(User.email == email))
-#     user = result.scalar_one_or_none()
-
-#     if not user or not verify_password(password, user.password):
-#         raise HTTPException(status_code=401, detail="Invalid credentials")
-
-#     token = create_access_token({"user_id": str(user.id)})
-
-#     return {"access_token": token}
-
 @app.get("/feed")
 async def get_feed(
-    user: User = Depends(get_current_user),
+    user: User = Depends(current_user),
     session: AsyncSession = Depends(get_async_session)
 ):
     # Use .options(selectinload(Post.user)) to pull the user data in the same 'await'
@@ -120,7 +81,7 @@ UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 @app.post("/upload/")
 async def upload_file(
-    user: User = Depends(get_current_user),
+    user: User = Depends(current_user),
     file: UploadFile = File(...),
     caption: str = Form(...),
     session: AsyncSession = Depends(get_async_session)
